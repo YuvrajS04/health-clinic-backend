@@ -1,0 +1,13 @@
+# Node.js dependencies
+node_modules/
+
+# Logs
+*.log
+
+# OS-specific files
+.DS_Store
+
+# IDE-specific files (example for VS Code)
+.vscode/
+
+.env
