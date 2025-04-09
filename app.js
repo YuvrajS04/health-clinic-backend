@@ -85,6 +85,59 @@ const isValidTimeSlot = (time) => {
   const [hours, minutes] = time.split(':').map(Number);
   return minutes === 0 || minutes === 30;
 };
+app.put('/appointments/:appointment_id', (req, res) => {
+  const appointmentId = req.params.appointment_id;
+  const { appointment_date, appointment_time, status } = req.body;
+
+  // Validate input
+  if (!appointment_date || !appointment_time) {
+    return res.status(400).json({ message: "Appointment date and time are required" });
+  }
+
+  if (!isValidTimeSlot(appointment_time)) {
+    return res.status(400).json({ message: "Appointment time must be in 30-minute intervals (e.g., 10:00, 10:30)" });
+  }
+
+  // Check if the new slot is already taken for the same doctor (optional but good)
+  const checkAvailabilityQuery = `
+    SELECT * FROM Appointment
+    WHERE doctor_id = (
+      SELECT doctor_id FROM Appointment WHERE appointment_id = ?
+    )
+    AND appointment_date = ? AND appointment_time = ? AND appointment_id != ?
+  `;
+
+  db.query(checkAvailabilityQuery, [appointmentId, appointment_date, appointment_time, appointmentId], (err, results) => {
+    if (err) {
+      console.error("Error checking availability:", err);
+      return res.status(500).json({ message: "Server error" });
+    }
+
+    if (results.length > 0) {
+      return res.status(400).json({ message: "Another appointment already exists at this time" });
+    }
+
+    const updateQuery = `
+      UPDATE Appointment
+      SET appointment_date = ?, appointment_time = ?, status = ?
+      WHERE appointment_id = ?
+    `;
+
+    db.query(updateQuery, [appointment_date, appointment_time, status || 'Scheduled', appointmentId], (err, result) => {
+      if (err) {
+        console.error("Error updating appointment:", err);
+        return res.status(500).json({ message: "Failed to update appointment" });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Appointment not found" });
+      }
+
+      res.status(200).json({ message: "Appointment updated successfully" });
+    });
+  });
+});
+
 
 
 // Create an appointment (Patient books an appointment)
@@ -158,15 +211,59 @@ app.delete('/appointments/:appointment_id', (req, res) => {
 // Function to insert default appointments only if they don't already exist
 const insertDefaultAppointments = () => {
   const appointments = [
-    { patient_id: 1, doctor_id: 1, appointment_date: '2025-04-10', appointment_time: '10:00' },
-    { patient_id: 2, doctor_id: 1, appointment_date: '2025-04-12', appointment_time: '14:30' },
-    { patient_id: 3, doctor_id: 1, appointment_date: '2025-04-15', appointment_time: '11:00' },
-    { patient_id: 4, doctor_id: 4, appointment_date: '2025-04-09', appointment_time: '09:30' },
-    { patient_id: 5, doctor_id: 5, appointment_date: '2025-04-14', appointment_time: '15:00' },
-    { patient_id: 4, doctor_id: 2, appointment_date: '2025-04-16', appointment_time: '13:00' },
-    { patient_id: 4, doctor_id: 3, appointment_date: '2025-04-11', appointment_time: '10:30' },
-    { patient_id: 3, doctor_id: 3, appointment_date: '2025-04-13', appointment_time: '16:00' },
-    { patient_id: 5, doctor_id: 5, appointment_date: '2025-04-17', appointment_time: '08:30' }
+    { patient_id: 1, doctor_id: 1, appointment_date: '2025-04-11', appointment_time: '09:00' },
+    { patient_id: 2, doctor_id: 1, appointment_date: '2025-04-11', appointment_time: '09:30' },
+    { patient_id: 3, doctor_id: 1, appointment_date: '2025-04-11', appointment_time: '10:00' },
+    { patient_id: 4, doctor_id: 1, appointment_date: '2025-04-11', appointment_time: '10:30' },
+    { patient_id: 5, doctor_id: 1, appointment_date: '2025-04-11', appointment_time: '11:00' },
+    
+    { patient_id: 6, doctor_id: 2, appointment_date: '2025-04-11', appointment_time: '09:00' },
+    { patient_id: 7, doctor_id: 2, appointment_date: '2025-04-11', appointment_time: '09:30' },
+    { patient_id: 8, doctor_id: 2, appointment_date: '2025-04-11', appointment_time: '10:00' },
+    { patient_id: 9, doctor_id: 2, appointment_date: '2025-04-11', appointment_time: '10:30' },
+    { patient_id: 10, doctor_id: 2, appointment_date: '2025-04-11', appointment_time: '11:00' },
+
+    { patient_id: 1, doctor_id: 3, appointment_date: '2025-04-12', appointment_time: '09:00' },
+    { patient_id: 2, doctor_id: 3, appointment_date: '2025-04-12', appointment_time: '09:30' },
+    { patient_id: 3, doctor_id: 3, appointment_date: '2025-04-12', appointment_time: '10:00' },
+    { patient_id: 4, doctor_id: 3, appointment_date: '2025-04-12', appointment_time: '10:30' },
+    { patient_id: 5, doctor_id: 3, appointment_date: '2025-04-12', appointment_time: '11:00' },
+
+    { patient_id: 6, doctor_id: 4, appointment_date: '2025-04-13', appointment_time: '09:00' },
+    { patient_id: 7, doctor_id: 4, appointment_date: '2025-04-13', appointment_time: '09:30' },
+    { patient_id: 8, doctor_id: 4, appointment_date: '2025-04-13', appointment_time: '10:00' },
+    { patient_id: 9, doctor_id: 4, appointment_date: '2025-04-13', appointment_time: '10:30' },
+    { patient_id: 10, doctor_id: 4, appointment_date: '2025-04-13', appointment_time: '11:00' },
+
+    { patient_id: 1, doctor_id: 5, appointment_date: '2025-04-14', appointment_time: '09:00' },
+    { patient_id: 2, doctor_id: 5, appointment_date: '2025-04-14', appointment_time: '09:30' },
+    { patient_id: 3, doctor_id: 5, appointment_date: '2025-04-14', appointment_time: '10:00' },
+    { patient_id: 4, doctor_id: 5, appointment_date: '2025-04-14', appointment_time: '10:30' },
+    { patient_id: 5, doctor_id: 5, appointment_date: '2025-04-14', appointment_time: '11:00' },
+
+    { patient_id: 6, doctor_id: 1, appointment_date: '2025-04-15', appointment_time: '09:00' },
+    { patient_id: 7, doctor_id: 1, appointment_date: '2025-04-15', appointment_time: '09:30' },
+    { patient_id: 8, doctor_id: 1, appointment_date: '2025-04-15', appointment_time: '10:00' },
+    { patient_id: 9, doctor_id: 1, appointment_date: '2025-04-15', appointment_time: '10:30' },
+    { patient_id: 10, doctor_id: 1, appointment_date: '2025-04-15', appointment_time: '11:00' },
+
+    { patient_id: 1, doctor_id: 2, appointment_date: '2025-04-16', appointment_time: '09:00' },
+    { patient_id: 2, doctor_id: 2, appointment_date: '2025-04-16', appointment_time: '09:30' },
+    { patient_id: 3, doctor_id: 2, appointment_date: '2025-04-16', appointment_time: '10:00' },
+    { patient_id: 4, doctor_id: 2, appointment_date: '2025-04-16', appointment_time: '10:30' },
+    { patient_id: 5, doctor_id: 2, appointment_date: '2025-04-16', appointment_time: '11:00' },
+
+    { patient_id: 6, doctor_id: 3, appointment_date: '2025-04-17', appointment_time: '09:00' },
+    { patient_id: 7, doctor_id: 3, appointment_date: '2025-04-17', appointment_time: '09:30' },
+    { patient_id: 8, doctor_id: 3, appointment_date: '2025-04-17', appointment_time: '10:00' },
+    { patient_id: 9, doctor_id: 3, appointment_date: '2025-04-17', appointment_time: '10:30' },
+    { patient_id: 10, doctor_id: 3, appointment_date: '2025-04-17', appointment_time: '11:00' },
+
+    { patient_id: 1, doctor_id: 4, appointment_date: '2025-04-18', appointment_time: '09:00' },
+    { patient_id: 2, doctor_id: 4, appointment_date: '2025-04-18', appointment_time: '09:30' },
+    { patient_id: 3, doctor_id: 4, appointment_date: '2025-04-18', appointment_time: '10:00' },
+    { patient_id: 4, doctor_id: 4, appointment_date: '2025-04-18', appointment_time: '10:30' },
+    { patient_id: 5, doctor_id: 4, appointment_date: '2025-04-18', appointment_time: '11:00' }
   ];
 
   appointments.forEach(appt => {
